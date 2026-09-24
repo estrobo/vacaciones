@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_DIALECT=sqlite
+      - DB_NAME=vacation_system
+      - DB_USER=root
+      - DB_PASSWORD=
+      - DB_HOST=localhost
+      - JWT_SECRET=cambia_esta_clave_secreta_en_produccion
+      - JWT_EXPIRES=8h
+      - PORT=3000
+    volumes:
+      - ./backend:/app/backend
+      - ./public:/app/public
+      - ./backend/server.js:/app/backend/server.js
+      - ./package.json:/app/package.json
+      - sqlite_data:/app/database.sqlite
+
+volumes:
+  sqlite_data:

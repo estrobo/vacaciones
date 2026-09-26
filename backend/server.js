@@ -44,3 +44,11 @@ sequelize.sync()
   .catch(err => console.error('Error BD:', err));
 
 module.exports = app;
+// Redirigir todas las rutas no encontradas a la vista principal
+app.get('/registro', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});

@@ -47,6 +47,9 @@ const API = {
   registrar: (datos) => API.request('/auth/registrar', 'POST', datos),
   perfil: () => API.request('/auth/perfil'),
 
+  // ADMIN/RRHH - Reset contraseña por email
+  resetPassword: (datos) => API.request('/auth/reset-password', 'POST', datos),
+
   // Usuarios
   dashboard: () => API.request('/usuarios/dashboard'),
   listarUsuarios: (params = '') => API.request(`/usuarios${params}`),

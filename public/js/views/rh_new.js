@@ -408,6 +408,8 @@ async function vistaTrabajadores() {
                   <button class="btn btn-outline btn-sm" style="margin-left:6px;" onclick="window.desactivarTrabajador(${u.id})">${u.activo ? 'Desactivar' : 'Activar'}</button>
                   <button class="btn btn-outline btn-sm" style="margin-left:6px;" onclick="window.verHistoricoTrabajador(${u.id})">Días</button>
 
+                  <button class="btn btn-outline btn-sm" style="margin-left:6px;" onclick="window.resetPasswordPorEmail('${utils.escape(u.email || '')}')">Reset contraseña</button>
+
                   ${esAdmin ? `<button class="btn btn-small btn-danger" style="margin-left:6px;" onclick="window.eliminarUsuarioAdmin(${u.id})">Eliminar</button>` : ''}
                 </td>
               </tr>
@@ -438,6 +440,53 @@ async function vistaTrabajadores() {
 // export a window para router
 window.vistaPanelSolicitudes = vistaPanelSolicitudes;
 window.vistaTrabajadores = vistaTrabajadores;
+
+// RH/Admin - Restablecer contraseña (por email)
+window.resetPasswordPorEmail = async function(email) {
+  const safeEmail = email || '';
+  const fire = (window.Swal && typeof window.Swal.fire === 'function')
+    ? window.Swal.fire
+    : (utils && typeof utils.swal === 'function')
+      ? utils.swal
+      : null;
+
+  if (!fire) {
+    utils.swal
+      ? utils.swal('Swal no está disponible para pedir la contraseña. Usa un navegador con soporte o añade SweetAlert.', 'error')
+      : alert('Swal no está disponible para pedir la contraseña.');
+    return;
+  }
+
+  // Si no hay Swal real, pedimos con prompt
+  let newPassword;
+  if (window.Swal && typeof window.Swal.fire === 'function') {
+    const result = await window.Swal.fire({
+      title: 'Nueva contraseña',
+      input: 'password',
+      inputLabel: 'Contraseña',
+      inputAttributes: { minlength: 6, autocapitalize: 'off' },
+      showCancelButton: true,
+      confirmButtonText: 'Restablecer',
+      cancelButtonText: 'Cancelar'
+    });
+    newPassword = result?.value;
+  } else {
+    newPassword = prompt('Nueva contraseña');
+  }
+
+  if (!newPassword) return;
+
+  try {
+    const res = await API.resetPassword({ email: safeEmail, newPassword });
+    utils.swal
+      ? utils.swal(res.message || 'Contraseña restablecida con éxito', 'success')
+      : alert(res.message || 'Contraseña restablecida con éxito');
+  } catch (err) {
+    utils.swal
+      ? utils.swal(err.message || 'Error al resetear la contraseña', 'error')
+      : alert(err.message || 'Error al resetear la contraseña');
+  }
+};
 
 
 // Función para generar autorización de días imprimible para el trabajador

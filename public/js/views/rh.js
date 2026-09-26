@@ -185,6 +185,7 @@ function renderTablaTrabajadores(data) {
             <td>${u.activo ? 'Sí' : 'No'}</td>
             <td>
               <button class="btn btn-small" onclick="editarTrabajador(${u.id})">Editar</button>
+              <button class="btn btn-small" onclick="restablecerPasswordTrabajador('${utils.escape(u.email)}')">Reset contraseña</button>
               <button class="btn btn-small btn-danger" onclick="desactivarTrabajador(${u.id})">${u.activo ? 'Desactivar' : 'Activar'}</button>
             </td>
           </tr>
@@ -194,6 +195,39 @@ function renderTablaTrabajadores(data) {
   </div>`;
 
 }
+189 |             </td>
+190 |           </tr>
+191 |         `).join('')}
+192 |       </tbody>
+193 |     </table>
+194 |   </div>`;
+195 | 
+196 | }
+
+// RH/Admin - Restablecer contraseña (por email)
+async function resetPasswordPorEmail(email) {
+  const { value: newPassword } = await Swal.fire({
+    title: 'Nueva contraseña',
+    input: 'password',
+    inputLabel: 'Contraseña',
+    inputAttributes: { minlength: 6, autocapitalize: 'off' },
+    showCancelButton: true,
+    confirmButtonText: 'Restablecer',
+    cancelButtonText: 'Cancelar'
+  });
+
+  if (!newPassword) return;
+
+  try {
+    const res = await API.resetPassword({ email, newPassword });
+    // API devuelve message, pero algunos endpoints envuelven success; lo manejamos tolerante
+    const msg = res.message || 'Contraseña restablecida con éxito';
+    utils.swal(msg, 'success');
+  } catch (err) {
+    utils.swal(err.message || 'Error al resetear la contraseña', 'error');
+  }
+}
+
 
 // Funciones RH/Admin
 async function editarTrabajador(id) {

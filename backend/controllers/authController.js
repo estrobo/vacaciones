@@ -75,15 +75,26 @@ exports.login = async (req, res, next) => {
   }
 };
 
-// Obtener perfil del usuario autenticado
-exports.perfil = async (req, res, next) => {
+// Restablecer la contraseña (por email)
+exports.resetPassword = async (req, res) => {
+  const { email, newPassword } = req.body;
   try {
-    const usuario = await Usuario.findByPk(req.usuario.id, {
-      attributes: { exclude: ['password'] }
-    });
-    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json(usuario);
-  } catch (err) {
-    next(err);
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'email y newPassword son obligatorios' });
+    }
+
+    const usuario = await Usuario.findOne({ where: { email } });
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    usuario.password = await bcrypt.hash(newPassword, 10);
+    await usuario.save();
+
+    res.status(200).json({ message: 'Contraseña restablecida con éxito' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al resetear la contraseña', error });
   }
 };
+
+// Registro de usuario (solicita acceso; un admin debe asignar datos laborales)... (resto del código sin cambios)

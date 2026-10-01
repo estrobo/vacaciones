@@ -6,9 +6,33 @@ const {
   determinarCorteCorrespondiente,
   getControlVigente,
   recalcularControl,
-  contarDiasEntreFechas
+  contarDiasEntreFechas,
+  parseFecha
 } = require('../services/vacationService');
-const { notificarEstatusSolicitud, notificarNuevaSolicitudARH } = require('../services/emailService');
+const { notificarEstatusSolicitud, notificarNuevaSolicitudARH, notificarPrimeraAutorizacionRH } = require('../services/emailService');
+const ConfiguracionEmpresa = require('../models/ConfiguracionEmpresa');
+
+// Adjunta a cada solicitud el nombre de quien dio la primera autorización
+async function anexarNombreAutorizador(solicitudes) {
+  const lista = Array.isArray(solicitudes) ? solicitudes : [solicitudes];
+  await Promise.all(lista.map(async (s) => {
+    if (s.autorizado_por_1) {
+      const u = await Usuario.findByPk(s.autorizado_por_1, { attributes: ['nombre'] });
+      s.setDataValue('autorizado_por_1_nombre', u ? u.nombre : null);
+    }
+  }));
+  return solicitudes;
+}
+
+// true si la empresa tiene activada la doble autorización de RH
+async function requiereDobleAutorizacion() {
+  try {
+    const cfg = await ConfiguracionEmpresa.findByPk(1);
+    return !!(cfg && cfg.requiere_doble_autorizacion);
+  } catch (_) {
+    return false;
+  }
+}
 
 // Trabajador: crear una solicitud de vacaciones
 exports.crear = async (req, res, next) => {
@@ -17,8 +41,10 @@ exports.crear = async (req, res, next) => {
     if (!fecha_inicio || !fecha_fin) {
       return res.status(400).json({ error: 'Fecha de inicio y fin son obligatorias' });
     }
-    const inicio = new Date(fecha_inicio);
-    const fin = new Date(fecha_fin);
+    // IMPORTANTE: NO usar new Date('YYYY-MM-DD') (es medianoche UTC y en horario
+    // local de México se vuelve el día anterior). parseFecha crea fecha LOCAL.
+    const inicio = parseFecha(fecha_inicio);
+    const fin = parseFecha(fecha_fin);
     if (fin < inicio) {
       return res.status(400).json({ error: 'La fecha de fin no puede ser anterior a la de inicio' });
     }
@@ -162,6 +188,8 @@ exports.listarTodas = async (req, res, next) => {
       where, limit, offset, order: [['fecha_creacion', 'DESC']]
     });
 
+    await anexarNombreAutorizador(rows);
+
     res.json({
       data: rows,
       paginacion: { total: count, pagina: page, totalPaginas: Math.ceil(count / limit), limit }
@@ -183,6 +211,44 @@ exports.revisar = async (req, res, next) => {
     if (solicitud.estatus !== 'pendiente') {
       return res.status(400).json({ error: 'La solicitud ya fue revisada' });
     }
+
+    // ====== DOBLE AUTORIZACIÓN (solo si la empresa la tiene activada) ======
+    // La solicitud sigue 'pendiente' tras la 1ª autorización; solo con la 2ª
+    // (de un usuario RH/Admin DISTINTO) pasa a 'aprobada' y se descuentan días.
+    if (estatus === 'aprobada' && (await requiereDobleAutorizacion())) {
+      if (!solicitud.autorizado_por_1) {
+        // Primera autorización: solo se registra, NO cambia el estatus
+        solicitud.autorizado_por_1 = req.usuario.id;
+        solicitud.fecha_autorizacion_1 = new Date();
+        if (comentarios) solicitud.comentarios_rh = comentarios;
+        await solicitud.save();
+
+        // Notificar a los demás de RH para la segunda autorización
+        const destinatariosRH = await Usuario.findAll({
+          where: { rol: 'RRHH', activo: true, id: { [Op.ne]: req.usuario.id } },
+          attributes: ['email']
+        });
+        const trabajador = await Usuario.findByPk(solicitud.trabajador_id);
+        notificarPrimeraAutorizacionRH(
+          solicitud,
+          trabajador || { nombre: solicitud.trabajador_nombre },
+          destinatariosRH.map(u => u.email),
+          req.usuario.nombre || 'RH'
+        ).catch(console.error);
+
+        return res.json({
+          mensaje: 'Primera autorización registrada. Falta la autorización de otro usuario de RH para aprobar la solicitud.',
+          solicitud,
+          pendiente_segunda_autorizacion: true
+        });
+      }
+      if (solicitud.autorizado_por_1 === req.usuario.id) {
+        return res.status(400).json({
+          error: 'Ya registraste la primera autorización de esta solicitud. La segunda autorización debe darla otro usuario de RH/Admin.'
+        });
+      }
+    }
+    // =======================================================================
 
     solicitud.estatus = estatus;
     solicitud.comentarios_rh = comentarios || null;
@@ -214,6 +280,11 @@ exports.detalle = async (req, res, next) => {
     }
 
     const datos = solicitud.toJSON();
+    // Nombre de quien dio la primera autorización (doble autorización RH)
+    if (datos.autorizado_por_1) {
+      const aut = await Usuario.findByPk(datos.autorizado_por_1, { attributes: ['nombre'] });
+      datos.autorizado_por_1_nombre = aut ? aut.nombre : null;
+    }
     // Anexar datos actuales del trabajador (NSS, CURP, fecha de ingreso) para
     // documentos como la autorización de vacaciones imprimible.
     try {

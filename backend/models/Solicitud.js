@@ -56,6 +56,18 @@ const Solicitud = sequelize.define('Solicitud', {
     type: DataTypes.INTEGER,
     references: { model: 'usuarios', key: 'id' }
   },
+  // Doble autorización de RH (cuando la empresa lo requiere):
+  // guarda quién dio la PRIMERA autorización; la solicitud sigue 'pendiente'
+  // hasta que OTRO usuario de RH/Admin dé la segunda.
+  autorizado_por_1: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: 'usuarios', key: 'id' }
+  },
+  fecha_autorizacion_1: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
 
   // ¿La solicitud excede los días disponibles? (marcada como sin goce)
   sin_goce: {

@@ -14,12 +14,24 @@
     try { s = await API.detalleSolicitud(id); }
     catch(e){ utils.swal && utils.swal(e.message, 'error'); return; }
 
+    // ¿La empresa requiere doble autorización? (para ajustar textos del modal)
+    let dobleAut = false;
+    try { const cfg = await API.empresaObtener(); dobleAut = !!(cfg && cfg.requiere_doble_autorizacion); } catch(_) {}
+
+    const esSegundaAut = esAutorizar && dobleAut && !!s.autorizado_por_1;
+    const tituloAccion = !esAutorizar
+      ? 'Rechazar'
+      : (esSegundaAut ? 'Autorizar (2ª autorización)' : (dobleAut ? 'Autorizar (1ª autorización)' : 'Autorizar'));
+    const textoBoton = !esAutorizar
+      ? '✖ Sí, rechazar'
+      : (esSegundaAut ? '✔ Autorizar definitivamente' : (dobleAut ? '✔ Registrar 1ª autorización' : '✔ Sí, autorizar'));
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
       <div class="modal" style="max-width:560px;">
         <div class="modal-header">
-          <h3>${esAutorizar ? 'Autorizar' : 'Rechazar'} solicitud #${s.id}</h3>
+          <h3>${tituloAccion} solicitud #${s.id}</h3>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div id="dec-error"></div>
@@ -33,6 +45,7 @@
             <div class="info-item"><label>Corte</label><span>${utils.formatearFecha(s.corte_correspondiente)}</span></div>
             <div class="info-item"><label>Días CON goce</label><span>${s.dias_con_goce || 0}</span></div>
             <div class="info-item"><label>Días SIN goce</label><span>${s.dias_sin_goce || 0} ${(s.dias_sin_goce || 0) > 0 ? '<span class="badge badge-danger">SIN GOCE</span>' : ''}</span></div>
+            ${s.autorizado_por_1 ? `<div class="info-item"><label>1ª autorización</label><span><span class="badge" style="background:#fef3c7;color:#92400e;">✔ ${utils.escape(s.autorizado_por_1_nombre || 'RH')}</span></span></div>` : ''}
           </div>
           ${s.comentarios_trabajador ? `<div class="form-group"><label>Comentarios del trabajador</label><div class="alert alert-info">${utils.escape(s.comentarios_trabajador)}</div></div>` : ''}
           <div id="disponibilidad-info" class="form-group"><label>Disponibilidad del trabajador</label><div class="loading"><div class="spinner"></div></div></div>
@@ -43,7 +56,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
-          <button id="dec-btn-autorizar" class="btn ${esAutorizar ? 'btn-primary' : 'btn-danger'}">${esAutorizar ? '✔ Sí, autorizar' : '✖ Sí, rechazar'}</button>
+          <button id="dec-btn-autorizar" class="btn ${esAutorizar ? 'btn-primary' : 'btn-danger'}">${textoBoton}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -81,15 +94,15 @@
       const btn = document.getElementById('dec-btn-autorizar');
       btn.disabled = true; btn.textContent = 'Procesando...';
       try {
-        await API.revisarSolicitud(id, { estatus: esAutorizar ? 'aprobada' : 'rechazada', comentarios: comentario });
-        utils.swal && utils.swal(`Solicitud ${esAutorizar ? 'APROBADA' : 'RECHAZADA'}`, 'success');
+        const res = await API.revisarSolicitud(id, { estatus: esAutorizar ? 'aprobada' : 'rechazada', comentarios: comentario });
+        utils.swal && utils.swal(res.mensaje || `Solicitud ${esAutorizar ? 'APROBADA' : 'RECHAZADA'}`, 'success');
         overlay.remove();
         if (typeof window.cargarTodasSolicitudes === 'function') window.cargarTodasSolicitudes();
         if (typeof window.__cargarTodasSolicitudes === 'function') window.__cargarTodasSolicitudes();
         if (typeof window.__cargarMisSolicitudes === 'function') window.__cargarMisSolicitudes();
       } catch(e) {
         document.getElementById('dec-error').innerHTML = `<div class="alert alert-error">${utils.escape(e.message || String(e))}</div>`;
-        btn.disabled = false; btn.textContent = esAutorizar ? '✔ Sí, autorizar' : '✖ Sí, rechazar';
+        btn.disabled = false; btn.textContent = textoBoton;
       }
     });
   };
@@ -195,7 +208,11 @@
       const inicio = parseFechaISO(fi);
       const fin = parseFechaISO(ff);
       if(fin < inicio){ diasInfoEl.textContent = '0'; return; }
-      const diff = Math.round((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+      // Contar días laborales: los DOMINGOS no se cuentan (no se labora domingo)
+      let diff = 0;
+      for(let t = inicio; t <= fin; t += 1000 * 60 * 60 * 24){
+        if(new Date(t).getUTCDay() !== 0) diff++; // 0 = domingo
+      }
       diasInfoEl.textContent = String(diff);
       return diff;
     }

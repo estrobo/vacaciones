@@ -232,4 +232,62 @@ async function enviarCorreoPrueba({ to, subject, body }) {
   return { to, subject: subject || null };
 }
 
-module.exports = { notificarEstatusSolicitud, notificarNuevaSolicitudARH, enviarCorreoPrueba };
+// Notifica a RH que una solicitud ya tiene la PRIMERA autorización
+// y requiere la segunda (doble autorización activada)
+async function notificarPrimeraAutorizacionRH(solicitud, trabajador, rhEmails, autorizo) {
+  let cfg = null;
+  try {
+    const { sequelize } = require('../config/database');
+    const { DataTypes } = require('sequelize');
+    const EmailConfigModel = sequelize.define('EmailConfig', {
+      id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+      smtp_host: { type: DataTypes.STRING(200), allowNull: true },
+      smtp_port: { type: DataTypes.INTEGER, allowNull: true },
+      smtp_user: { type: DataTypes.STRING(200), allowNull: true },
+      smtp_password: { type: DataTypes.STRING(500), allowNull: true },
+      company_name: { type: DataTypes.STRING(200), allowNull: true },
+      rrhh_recipients: { type: DataTypes.TEXT, allowNull: true }
+    }, { tableName: 'email_config', timestamps: false, freezeTableName: true });
+
+    cfg = await getLatestEmailConfig(EmailConfigModel);
+  } catch (_) {
+    cfg = null;
+  }
+
+  if ((!rhEmails || rhEmails.length === 0) && cfg) {
+    rhEmails = parseRecipients(cfg.rrhh_recipients);
+  }
+  if (!rhEmails || rhEmails.length === 0) return;
+
+  const companyName = empresaNombreFromConfig(cfg?.company_name);
+
+  const cuerpo = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2c3e50;">Solicitud pendiente de SEGUNDA autorización</h2>
+      <p>La siguiente solicitud ya fue autorizada por <strong>${autorizo}</strong> y requiere la segunda autorización de otro usuario de RH para quedar aprobada.</p>
+      <div style="background: #f4f6f8; padding: 15px; border-radius: 5px; margin: 15px 0;">
+        <p style="margin: 5px 0;"><strong>Trabajador:</strong> ${trabajador.nombre}</p>
+        <p style="margin: 5px 0;"><strong>Días solicitados:</strong> ${solicitud.dias_solicitados}</p>
+        <p style="margin: 5px 0;"><strong>Fecha de inicio:</strong> ${solicitud.fecha_inicio}</p>
+        <p style="margin: 5px 0;"><strong>Fecha de fin:</strong> ${solicitud.fecha_fin}</p>
+      </div>
+      <p>Ingresa al sistema para dar la segunda autorización o rechazar la solicitud.</p>
+      <p style="color: #7f8c8d; font-size: 12px; margin-top: 30px;">Este es un correo automático, no respondas a este mensaje.</p>
+    </div>
+  `;
+
+  try {
+    const transport = getTransporter(cfg);
+    await transport.sendMail({
+      from: `"${companyName}" <${cfg?.smtp_user || process.env.EMAIL_USER}>`,
+      to: rhEmails.join(', '),
+      subject: `Falta 2ª autorización - ${trabajador.nombre}`,
+      html: cuerpo
+    });
+    console.log('Notificación de pendiente de segunda autorización enviada a RH');
+  } catch (err) {
+    console.error('Error al enviar correo de segunda autorización a RH:', err.message);
+  }
+}
+
+module.exports = { notificarEstatusSolicitud, notificarNuevaSolicitudARH, notificarPrimeraAutorizacionRH, enviarCorreoPrueba };

@@ -67,6 +67,14 @@ async function vistaConfiguracionAdmin() {
             <input id="empresa_subtitulo" class="form-control" type="text" placeholder="Recursos Humanos">
           </div>
           <div style="flex-basis:100%;height:1px;"></div>
+          <div class="form-group" style="flex-basis:100%;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input id="requiere_doble_autorizacion" type="checkbox">
+              Requerir doble autorización de RH para aprobar solicitudes
+            </label>
+            <small style="color:#666;">Si está activo, una solicitud solo queda APROBADA cuando DOS usuarios distintos de RH/Admin la autorizan. Si se desactiva, las solicitudes vuelven a aprobarse con una sola autorización.</small>
+          </div>
+          <div style="flex-basis:100%;height:1px;"></div>
           <div class="form-group" style="min-width:320px;flex:1;">
             <label>Logotipo (PNG/JPG, máx. 5MB)</label>
             <input id="empresa_logo_file" class="form-control" type="file" accept="image/*">
@@ -102,7 +110,8 @@ async function vistaConfiguracionAdmin() {
     try {
       const datos = {
         nombre: document.getElementById('empresa_nombre').value,
-        subtitulo: document.getElementById('empresa_subtitulo').value
+        subtitulo: document.getElementById('empresa_subtitulo').value,
+        requiere_doble_autorizacion: document.getElementById('requiere_doble_autorizacion').checked
       };
       if (archivo) {
         if (!archivo.type.startsWith('image/')) throw new Error('El archivo debe ser una imagen');
@@ -168,6 +177,7 @@ async function cargarEmpresaConfig() {
     const cfg = await API.empresaObtener();
     document.getElementById('empresa_nombre').value = cfg.nombre || '';
     document.getElementById('empresa_subtitulo').value = cfg.subtitulo || '';
+    document.getElementById('requiere_doble_autorizacion').checked = !!cfg.requiere_doble_autorizacion;
     const prev = document.getElementById('empresa_logo_preview');
     if (cfg.logo) {
       prev.src = cfg.logo;

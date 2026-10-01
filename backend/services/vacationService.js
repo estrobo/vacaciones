@@ -19,11 +19,18 @@ function fmtFecha(d) {
 // Compatibilidad con código existente
 function normalizarFecha(fecha) { return parseFecha(fecha); }
 
-// Días naturales inclusivos entre dos fechas
+// Días laborales inclusivos entre dos fechas (los DOMINGOS no se cuentan,
+// porque en esta empresa no se labora los domingos)
 function contarDiasEntreFechas(fechaInicio, fechaFin) {
   const inicio = parseFecha(fechaInicio);
   const fin = parseFecha(fechaFin);
-  return Math.round((fin.getTime() - inicio.getTime()) / 86400000) + 1;
+  let dias = 0;
+  const actual = new Date(inicio);
+  while (actual <= fin) {
+    if (actual.getDay() !== 0) dias++; // 0 = domingo
+    actual.setDate(actual.getDate() + 1);
+  }
+  return dias;
 }
 
 // Antigüedad en años cumplidos
@@ -127,7 +134,11 @@ async function recalcularControl(controlId) {
   if (!control) return null;
 
   const baseAutomatica = control.dias_asignados - control.dias_usados - control.dias_pendientes;
-  const ajusteManual = control.dias_disponibles - baseAutomatica;
+  // El disponible nunca puede ser negativo (al crear solicitudes se clampa a 0),
+  // por lo que el ajuste manual real se mide contra el máximo posible de la base.
+  // Si baseAutomatica es negativa (solicitudes sin goce exceden lo asignado),
+  // NO debe interpretarse como ajuste manual: el ajuste real es 0.
+  const ajusteManual = control.dias_disponibles - Math.max(0, baseAutomatica);
 
   const aprobadas = await Solicitud.findAll({
     where: { trabajador_id: control.trabajador_id, estatus: 'aprobada', corte_correspondiente: control.corte_anual }

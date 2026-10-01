@@ -10,7 +10,10 @@ const ConfiguracionEmpresa = sequelize.define(
     nombre: { type: DataTypes.STRING(200), allowNull: true },
     subtitulo: { type: DataTypes.STRING(200), allowNull: true },
     // Logotipo guardado como data URL (data:image/png;base64,...) para persistirlo en BD
-    logo: { type: DataTypes.TEXT, allowNull: true }
+    logo: { type: DataTypes.TEXT, allowNull: true },
+    // Interruptor: si es true, las solicitudes requieren 2 autorizaciones de RH/Admin
+    // (de usuarios distintos) antes de quedar aprobadas.
+    requiere_doble_autorizacion: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }
   },
   { tableName: 'configuracion_empresa', timestamps: false }
 );

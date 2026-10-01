@@ -24,7 +24,8 @@ exports.obtener = async (req, res, next) => {
       id: cfg.id,
       nombre: cfg.nombre,
       subtitulo: cfg.subtitulo,
-      logo: cfg.logo || null
+      logo: cfg.logo || null,
+      requiere_doble_autorizacion: !!cfg.requiere_doble_autorizacion
     });
   } catch (err) {
     next(err);
@@ -36,7 +37,7 @@ exports.obtener = async (req, res, next) => {
 //         omitido para conservar el actual.
 exports.guardar = async (req, res, next) => {
   try {
-    const { nombre, subtitulo, logo } = req.body || {};
+    const { nombre, subtitulo, logo, requiere_doble_autorizacion } = req.body || {};
 
     let logoFinal = null;
     if (logo !== undefined && logo !== null) {
@@ -63,6 +64,9 @@ exports.guardar = async (req, res, next) => {
       cfg.logo = null;
     } else {
       cfg.logo = logoFinal;
+    }
+    if (requiere_doble_autorizacion !== undefined) {
+      cfg.requiere_doble_autorizacion = !!requiere_doble_autorizacion;
     }
     await cfg.save();
 

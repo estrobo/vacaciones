@@ -34,6 +34,7 @@ async function vistaPanelSolicitudes() {
     </div>`;
 
 function renderTablaSolicitudes(data, esRH, esAdmin = false) {
+  const usuarioActualId = (JSON.parse(localStorage.getItem('usuario') || '{}')).id;
   return `
     <div class="table-wrapper">
       <table>
@@ -54,7 +55,12 @@ function renderTablaSolicitudes(data, esRH, esAdmin = false) {
               <td>${utils.formatearFechaHora(item.fecha_creacion)}</td>
               <td>
                 ${item.estatus === 'pendiente' && !item.es_cierre_general
-                  ? `<button class="btn btn-small" onclick="window.abrirDecisionSolicitud(${item.id}, true)">Autorizar</button>
+                  ? `${item.autorizado_por_1
+                        ? `<div style="margin-bottom:4px;"><span class="badge" style="background:#fef3c7;color:#92400e;">✔ 1ª autorización: ${utils.escape(item.autorizado_por_1_nombre || 'RH')}</span></div>`
+                        : ''}
+                     ${item.autorizado_por_1 && item.autorizado_por_1 === usuarioActualId
+                        ? '<span style="color:#92400e;font-size:12px;">Esperando 2ª autorización de otro usuario</span>'
+                        : `<button class="btn btn-small" onclick="window.abrirDecisionSolicitud(${item.id}, true)">${item.autorizado_por_1 ? 'Autorizar (2/2)' : 'Autorizar'}</button>`}
                      <button class="btn btn-small" onclick="window.abrirDecisionSolicitud(${item.id}, false)">Rechazar</button>`
                   : ''}
                 ${item.estatus === 'aprobada' && !item.es_cierre_general
@@ -513,7 +519,6 @@ window.generarPDFAutorizacion = async function(idSolicitud){
       nss: data.trabajador_nss || 'N/A',
       curp: data.trabajador_curp || 'N/A',
       fecha_ingreso: data.trabajador_fecha_ingreso ? u.formatearFecha(data.trabajador_fecha_ingreso) : 'N/A',
-      departamento: data.trabajador_departamento || 'N/A',
     };
 
     const etiquetasEstatus = { pendiente: 'Pendiente', aprobada: 'Aprobada', rechazada: 'Rechazada', cancelada: 'Cancelada' };
@@ -536,20 +541,22 @@ window.generarPDFAutorizacion = async function(idSolicitud){
         <meta charset="utf-8">
         <title>Autorización de Vacaciones</title>
         <style>
-          body { font-family: Calibri, Arial, sans-serif; color: #222; margin: 0; padding: 40px; }
-          .encabezado { text-align: center; border-bottom: 3px solid #1a5276; padding-bottom: 14px; margin-bottom: 24px; }
-          .encabezado img.logo { max-height: 80px; max-width: 260px; object-fit: contain; margin-bottom: 8px; }
-          .encabezado h1 { margin: 0; font-size: 28px; color: #1a5276; letter-spacing: 2px; }
-          .encabezado p { margin: 4px 0 0; color: #777; font-size: 13px; }
-          h2 { text-align: center; font-size: 20px; letter-spacing: 1px; color: #1a5276; margin: 0 0 22px; }
-          table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; }
-          td, th { border: 1px solid #bbb; padding: 9px 12px; font-size: 14px; text-align: left; }
+          @page { size: letter; margin: 15mm; }
+          body { font-family: Calibri, Arial, sans-serif; color: #222; margin: 0; padding: 16px; }
+          .encabezado { text-align: center; border-bottom: 3px solid #1a5276; padding-bottom: 10px; margin-bottom: 14px; }
+          .encabezado img.logo { max-height: 60px; max-width: 220px; object-fit: contain; margin-bottom: 6px; }
+          .encabezado h1 { margin: 0; font-size: 22px; color: #1a5276; letter-spacing: 2px; }
+          .encabezado p { margin: 2px 0 0; color: #777; font-size: 12px; }
+          h2 { text-align: center; font-size: 17px; letter-spacing: 1px; color: #1a5276; margin: 0 0 12px; }
+          p { margin: 6px 0; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; page-break-inside: avoid; }
+          td, th { border: 1px solid #bbb; padding: 5px 10px; font-size: 12px; text-align: left; }
           th { background: #eaf2f8; color: #1a5276; width: 42%; }
-          .firmas { display: flex; justify-content: space-between; margin-top: 48px; }
+          .firmas { display: flex; justify-content: space-between; margin-top: 56px; page-break-inside: avoid; }
           .firma { text-align: center; width: 45%; }
-          .firma .linea { border-top: 1px solid #222; margin-bottom: 6px; }
-          .nota { text-align: center; font-size: 11px; color: #888; margin-top: 30px; }
-          @media print { body { padding: 12mm; } }
+          .firma .linea { border-top: 1px solid #222; margin-bottom: 4px; }
+          .nota { text-align: center; font-size: 10px; color: #888; margin-top: 24px; }
+          @media print { body { padding: 0; } }
         </style>
       </head>
       <body>
@@ -566,7 +573,6 @@ window.generarPDFAutorizacion = async function(idSolicitud){
           <tr><th>NSS</th><td>${u.escape(trabajador.nss)}</td></tr>
           <tr><th>CURP</th><td>${u.escape(trabajador.curp)}</td></tr>
           <tr><th>Fecha de ingreso</th><td>${trabajador.fecha_ingreso}</td></tr>
-          <tr><th>Departamento</th><td>${u.escape(trabajador.departamento)}</td></tr>
         </table>
         <p>Datos de la solicitud:</p>
         <table>
